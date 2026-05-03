@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My AI Assistant</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+  .header { padding: 16px 24px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 20px; }
+  .header-btns { display: flex; gap: 8px; }
+  .chip { padding: 6px 14px; border-radius: 20px; border: none; cursor: pointer; font-size: 13px; font-weight: bold; }
+  .suggestions { padding: 12px 24px; display: flex; gap: 8px; flex-wrap: wrap; background: #111; border-bottom: 1px solid #222; }
+  .suggestion { padding: 8px 14px; background: #1e1e1e; border: 1px solid #444; border-radius: 20px; cursor: pointer; font-size: 13px; color: #ccc; }
+  .suggestion:hover { background: #2a2a2a; color: #fff; }
+  .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .user-msg { align-self: flex-end; background: #2563eb; padding: 12px 18px; border-radius: 18px 18px 4px 18px; max-width: 70%; line-height: 1.6; }
+  .ai-msg { align-self: flex-start; background: #1e1e1e; border: 1px solid #333; padding: 12px 18px; border-radius: 18px 18px 18px 4px; max-width: 75%; line-height: 1.6; white-space: pre-wrap; }
+  .loading { align-self: flex-start; color: #888; padding: 8px; }
+  .input-area { padding: 16px 24px; background: #1a1a1a; border-top: 1px solid #333; display: flex; gap: 8px; }
+  .input-area input { flex: 1; padding: 14px 20px; border-radius: 28px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 15px; outline: none; }
+  .input-area input:focus { border-color: #2563eb; }
+  .send-btn { padding: 14px 24px; background: #2563eb; border: none; border-radius: 28px; color: #fff; font-size: 15px; cursor: pointer; font-weight: bold; }
+  .mic-btn { padding: 14px 18px; background: #7c3aed; border: none; border-radius: 28px; color: #fff; font-size: 18px; cursor: pointer; }
+  .voice-btn { padding: 14px 18px; background: #16a34a; border: none; border-radius: 28px; color: #fff; font-size: 15px; cursor: pointer; }
+  .voice-btn.off { background: #dc2626; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #888; margin: 0 2px; animation: bounce 1s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🤖 My AI Assistant</h1>
+  <div class="header-btns">
+    <button class="chip" style="background:#7c3aed" onclick="toggleVoice()">🔊 Voice ON</button>
+    <button class="chip" style="background:#dc2626" onclick="clearChat()">🗑️ Clear</button>
+  </div>
+</div>
+
+<div class="suggestions">
+  <span class="suggestion" onclick="send('Teach me MERN stack from scratch')">📚 Teach me MERN</span>
+  <span class="suggestion" onclick="send('Teach me AI development')">🤖 Teach me AI</span>
+  <span class="suggestion" onclick="send('What is 25 * 48?')">🧮 Calculator</span>
+  <span class="suggestion" onclick="send('What is the weather in Bangalore?')">🌤️ Weather</span>
+  <span class="suggestion" onclick="send('Teach me communication skills')">🗣️ Communication</span>
+  <span class="suggestion" onclick="send('What is the capital of France?')">🌍 General Q&A</span>
+  <span class="suggestion" onclick="send('Teach me DSA from scratch')">💻 Teach me DSA</span>
+</div>
+
+<div class="messages" id="messages">
+  <div class="ai-msg">👋 Hi! I'm your AI Assistant. I can:
+  
+📚 <strong>Teach you anything</strong> - "teach me React"
+🧮 <strong>Do math</strong> - "what is 15% of 5000"  
+🌤️ <strong>Weather</strong> - "weather in Mumbai"
+🌍 <strong>Answer questions</strong> - "capital of Japan"
+🧠 <strong>Remember you</strong> - "my name is Monika"
+
+Click a suggestion above or type below! 🚀</div>
+</div>
+
+<div class="input-area">
+  <input type="text" id="input" placeholder="Ask me anything..." 
+         onkeydown="if(event.key==='Enter') sendMsg()" />
+  <button class="mic-btn" onclick="startVoice()">🎤</button>
+  <button class="send-btn" onclick="sendMsg()">Send</button>
+</div>
+
+<script>
+  let history = [];
+  let voiceOn = true;
+
+  function toggleVoice() {
+    voiceOn = !voiceOn;
+    const btn = document.querySelector('.chip');
+    btn.textContent = voiceOn ? '🔊 Voice ON' : '🔇 Voice OFF';
+    btn.style.background = voiceOn ? '#16a34a' : '#dc2626';
+  }
+
+  function speak(text) {
+    if (!voiceOn) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text.slice(0, 300));
+    utter.rate = 0.9;
+    window.speechSynthesis.speak(utter);
+  }
+
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return alert('Voice not supported in this browser. Use Chrome!');
+    const r = new SR();
+    r.lang = 'en-US';
+    r.start();
+    r.onresult = e => {
+      document.getElementById('input').value = e.results[0][0].transcript;
+    };
+  }
+
+  function addMsg(role, text) {
+    const div = document.createElement('div');
+    div.className = role === 'user' ? 'user-msg' : 'ai-msg';
+    div.textContent = text;
+    document.getElementById('messages').appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth' });
+    return div;
+  }
+
+  function showLoading() {
+    const div = document.createElement('div');
+    div.className = 'loading';
+    div.id = 'loading';
+    div.innerHTML = 'AI is thinking <span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    document.getElementById('messages').appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function hideLoading() {
+    document.getElementById('loading')?.remove();
+  }
+
+  function clearChat() {
+    history = [];
+    document.getElementById('messages').innerHTML = '';
+    addMsg('assistant', 'Chat cleared! Ask me anything 🚀');
+  }
+
+  async function send(text) {
+    document.getElementById('input').value = text;
+    await sendMsg();
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    addMsg('user', text);
+    history.push({ role: 'user', content: text });
+    input.value = '';
+    showLoading();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history })
+      });
+      const data = await res.json();
+      hideLoading();
+      
+      const reply = data.reply || data.error;
+      addMsg('assistant', reply);
+      history.push({ role: 'assistant', content: reply });
+      speak(reply);
+    } catch(e) {
+      hideLoading();
+      addMsg('assistant', '❌ Cannot connect to server. Make sure backend is running!');
+    }
+  }
+</script>
+</body>
+</html>
